@@ -1,0 +1,55 @@
+# Paso Seguro 5G · borde + Mosquitto
+#
+#   cp .env.example .env               # y ajustar CAMARA_FUENTES, URL_PUBLICA, etc.
+#   docker compose up -d --build        # tablero en http://IP-DEL-SERVIDOR:8000
+#
+# Ensayo con RTSP real sin la cámara 5G (mediamtx + ffmpeg sirviendo el video de prueba):
+#   docker compose --profile simulacion up -d --build
+#   y en .env: CAMARA_FUENTES=rtsp://rtsp:8554/rio,../tools/videos/rio_prueba.mp4
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  borde:
+    build: .
+    image: paso-seguro-borde:0.1
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MQTT_HOST: mosquitto
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./datos:/app/datos
+      - ./config:/app/config
+      # mismo camino relativo que en la laptop: ../tools/videos/rio_prueba.mp4
+      - ../tools/videos:/tools/videos:ro
+    depends_on:
+      - mosquitto
+    # Plan B: webcam USB conectada al servidor (descomentar y usar CAMARA_FUENTES=0)
+    # devices:
+    #   - /dev/video0:/dev/video0
+
+  rtsp:
+    image: bluenviron/mediamtx:latest
+    profiles: ["simulacion"]
+    restart: unless-stopped
+    ports:
+      - "8554:8554"
+
+  video-prueba:
+    image: linuxserver/ffmpeg:latest
+    profiles: ["simulacion"]
+    restart: unless-stopped
+    depends_on:
+      - rtsp
+    volumes:
+      - ../tools/videos:/videos:ro
+    command: ["-re", "-stream_loop", "-1", "-i", "/videos/rio_prueba.mp4", "-an", "-c:v", "copy",
+              "-f", "rtsp", "-rtsp_transport", "tcp", "rtsp://rtsp:8554/rio"]

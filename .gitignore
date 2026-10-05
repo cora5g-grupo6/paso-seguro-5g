@@ -1,0 +1,9 @@
+edge/.venv/
+edge/.env
+edge/datos/
+__pycache__/
+.pytest_cache/
+*.pyc
+tools/videos/*.mp4
+tools/videos/*.avi
+.DS_Store

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Paso Seguro · Estado del cruce</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23161e26'/%3E%3Cpath d='M4 20c4-4 8 4 12 0s8 4 12 0v8H4z' fill='%231a73e8'/%3E%3Ccircle cx='16' cy='10' r='5' fill='%23f9ab00'/%3E%3C/svg%3E">
+  <style>
+    :root { --c: #3a4652; color-scheme: light dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; font: 18px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: #f4f6f8; color: #14181c; display: flex; flex-direction: column; align-items: center; padding: 18px 16px; }
+    @media (prefers-color-scheme: dark) { body { background: #0e1318; color: #e9eef3; } }
+    .idiomas { display: flex; gap: 8px; align-self: flex-end; }
+    .idiomas button { font: 600 15px system-ui, sans-serif; padding: 8px 14px; border-radius: 10px; border: 2px solid currentColor;
+      background: transparent; color: inherit; cursor: pointer; }
+    .idiomas button[aria-pressed="true"] { background: #14181c; color: #fff; }
+    @media (prefers-color-scheme: dark) { .idiomas button[aria-pressed="true"] { background: #e9eef3; color: #14181c; } }
+    .tarjeta { width: 100%; max-width: 560px; margin-top: 18px; border-radius: 22px; padding: 26px 22px; text-align: center;
+      background: var(--c); color: #fff; box-shadow: 0 10px 30px rgba(0,0,0,.18); }
+    .tarjeta.CUIDADO { color: #1b1b1b; }
+    .icono svg { width: 96px; height: 96px; }
+    .estado { font-size: clamp(44px, 14vw, 76px); font-weight: 800; letter-spacing: .02em; line-height: 1.05; margin: 6px 0 12px; }
+    .mensaje { font-size: 20px; margin: 0 0 14px; }
+    .hora { font-size: 15px; opacity: .85; margin: 0; }
+    .nota { max-width: 560px; font-size: 14px; opacity: .75; text-align: center; margin-top: 18px; }
+  </style>
+</head>
+<body>
+  <div class="idiomas" role="group" aria-label="Idioma / Language">
+    <button type="button" data-l="es">Español</button>
+    <button type="button" data-l="en">English</button>
+  </div>
+  <main class="tarjeta" id="tarjeta" aria-live="assertive">
+    <div class="icono" id="icono" aria-hidden="true"></div>
+    <div class="estado" id="estado">…</div>
+    <p class="mensaje" id="mensaje"></p>
+    <p class="hora" id="hora"></p>
+  </main>
+  <p class="nota" id="nota"></p>
+<script>
+"use strict";
+(() => {
+  const COLORES = { LIBRE: "#1e8e3e", CUIDADO: "#f9ab00", CERRADO: "#d93025" };
+  const ICONOS = {
+    LIBRE: '<svg viewBox="0 0 96 96"><circle cx="48" cy="48" r="44" fill="none" stroke="currentColor" stroke-width="8"/><path d="M28 50l14 14 26-30" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    CUIDADO: '<svg viewBox="0 0 96 96"><path d="M48 8l44 80H4z" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"/><path d="M48 36v24" stroke="currentColor" stroke-width="9" stroke-linecap="round"/><circle cx="48" cy="72" r="5" fill="currentColor"/></svg>',
+    CERRADO: '<svg viewBox="0 0 96 96"><circle cx="48" cy="48" r="44" fill="none" stroke="currentColor" stroke-width="8"/><path d="M22 48h52" stroke="currentColor" stroke-width="12" stroke-linecap="round"/></svg>',
+  };
+  const TEXTOS = {
+    es: { cargando: "Cargando…", actualizado: "Actualizado", sinConexion: "SIN CONEXIÓN",
+      mensajeSin: "No hay conexión con el sistema del cruce. Si no está seguro, no cruce.",
+      nota: "Este aviso lo da el sistema del cruce y funciona aunque no haya internet." },
+    en: { cargando: "Loading…", actualizado: "Updated", sinConexion: "NO CONNECTION",
+      mensajeSin: "No connection with the crossing system. If you are not sure, do not cross.",
+      nota: "This notice comes from the crossing's own system and works without internet." },
+  };
+  let idioma = (navigator.language || "es").toLowerCase().startsWith("es") ? "es" : "en";
+  let ultimo = null;
+  let ultimaLlegada = 0;
+
+  function pintar() {
+    const t = TEXTOS[idioma];
+    document.documentElement.lang = idioma;
+    document.querySelectorAll(".idiomas button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.l === idioma)));
+    document.getElementById("nota").textContent = t.nota;
+    const tarjeta = document.getElementById("tarjeta");
+    const sinConexion = !ultimo || Date.now() - ultimaLlegada > 15000;
+    if (sinConexion) {
+      tarjeta.className = "tarjeta";
+      tarjeta.style.setProperty("--c", "#3a4652");
+      document.getElementById("icono").innerHTML = ICONOS.CUIDADO;
+      document.getElementById("estado").textContent = ultimo ? t.sinConexion : t.cargando;
+      document.getElementById("mensaje").textContent = ultimo ? t.mensajeSin : "";
+      document.getElementById("hora").textContent = "";
+      return;
+    }
+    const s = ultimo;
+    tarjeta.className = `tarjeta ${s.estado}`;
+    tarjeta.style.setProperty("--c", COLORES[s.estado]);
+    document.getElementById("icono").innerHTML = ICONOS[s.estado];
+    document.getElementById("estado").textContent = idioma === "es" ? s.mensajes.titulo_es : s.mensajes.titulo_en;
+    document.getElementById("mensaje").textContent = s.mensajes[idioma];
+    const h = new Date(s.t_ms).toLocaleTimeString(idioma === "es" ? "es-CR" : "en-US", { timeZone: "America/Costa_Rica", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    document.getElementById("hora").textContent = `${t.actualizado}: ${h}`;
+  }
+
+  function recibir(s) { ultimo = s; ultimaLlegada = Date.now(); pintar(); }
+
+  document.querySelectorAll(".idiomas button").forEach((b) => b.addEventListener("click", () => { idioma = b.dataset.l; pintar(); }));
+  const fuente = new EventSource("/api/stream");
+  fuente.addEventListener("estado", (e) => recibir(JSON.parse(e.data)));
+  setInterval(async () => {   // respaldo por si el SSE se corta
+    if (Date.now() - ultimaLlegada < 5000) return;
+    try { const r = await fetch("/api/estado", { cache: "no-store" }); if (r.ok) recibir(await r.json()); } catch (e) { /* sin red */ }
+    pintar();
+  }, 5000);
+  pintar();
+})();
+</script>
+</body>
+</html>

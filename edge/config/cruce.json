@@ -1,0 +1,43 @@
+{
+  "_comentario": "Cruce vigilado. Coordenadas [latitud, longitud] WGS84. La polilínea sigue la vía en el sentido del tránsito y es la que va al feed de Waze.",
+  "id": "vado-ruta-623",
+  "nombre": "Vado de la Ruta 623",
+  "rio": "Río Vainilla",
+  "lugar": "Lepanto, Puntarenas",
+  "tipo_via": "vehicular",
+  "calle": "Ruta 623",
+  "direccion": "BOTH_DIRECTIONS",
+  "punto": [9.908952, -85.206468],
+  "polilinea": [
+    [9.910472, -85.207366],
+    [9.910129, -85.206859],
+    [9.909899, -85.206706],
+    [9.909622, -85.206588],
+    [9.909180, -85.206535],
+    [9.908952, -85.206468],
+    [9.908291, -85.206275],
+    [9.908089, -85.206299],
+    [9.907747, -85.206699],
+    [9.907315, -85.207280]
+  ],
+  "rio_linea": [
+    [9.910134, -85.208026],
+    [9.909690, -85.207286],
+    [9.909172, -85.206803],
+    [9.908834, -85.206288],
+    [9.908696, -85.206138],
+    [9.908358, -85.205934],
+    [9.907999, -85.205912],
+    [9.907428, -85.206256]
+  ],
+  "ruta_alterna_es": "No cruce. Espere en un lugar alto o regrese por donde vino.",
+  "ruta_alterna_en": "Do not cross. Wait on high ground or turn back.",
+  "regla_cm": 30,
+  "equipos": [
+    {"tipo": "camara", "nombre": "Cámara 5G", "punto": [9.909300, -85.206200]},
+    {"tipo": "sensor", "nombre": "Flotador + ESP32", "punto": [9.908800, -85.206420]}
+  ],
+  "coordenadas_confirmadas": false,
+  "nota": "Punto de ejemplo tomado de OpenStreetMap el 5-oct-2026: cruce sin puente de la Vía 623 sobre un cauce que OSM llama «Quebrada Lajas». En OSM no aparece ningún río Vainilla. Falta confirmar con la comunidad o el MOPT el punto exacto del vado del río Vainilla y el nombre de la vía en Waze.",
+  "atribucion": "Geometría © colaboradores de OpenStreetMap (ODbL)"
+}

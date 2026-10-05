@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0e1318">
+  <title>Paso Seguro · Guía</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23161e26'/%3E%3Cpath d='M4 20c4-4 8 4 12 0s8 4 12 0v8H4z' fill='%231a73e8'/%3E%3Ccircle cx='16' cy='10' r='5' fill='%23f9ab00'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/estilo.css">
+  <style>
+    .envoltura { max-width: 760px; }
+    .tarjeta-alerta { border: 3px solid var(--color-estado, var(--borde)); }
+    .tarjeta-alerta .texto { font-size: 21px; font-weight: 700; margin-bottom: 10px; }
+    #btn-activar { width: 100%; }
+    .acciones .boton { flex: 1; }
+  </style>
+</head>
+<body>
+<div class="envoltura">
+  <header class="cabecera">
+    <div class="marca"><strong>Paso Seguro · Guía</strong><span id="nombre-cruce"></span></div>
+    <div class="fila">
+      <span class="chip"><span class="punto" id="pt-conexion"></span><span id="txt-conexion">Conectando…</span></span>
+      <span class="reloj" id="reloj">--:--:--</span>
+    </div>
+  </header>
+
+  <section class="panel" id="activar" style="margin-bottom:14px">
+    <p style="margin-top:0">Toque una vez para que las alertas suenen, hablen y vibren, y para que la pantalla no se apague.</p>
+    <button class="boton grande rojo" id="btn-activar" type="button">Activar alertas</button>
+  </section>
+
+  <section class="banner" id="banner">
+    <div class="estado" id="estado">…</div>
+    <div class="detalle"><b id="nivel"></b><div class="razon" id="razon"></div></div>
+  </section>
+
+  <section class="panel tarjeta-alerta oculto" id="alerta" style="margin-top:14px">
+    <h2>Alerta recibida · <span id="alerta-hora"></span></h2>
+    <div class="texto" id="alerta-texto"></div>
+    <img id="alerta-img" class="video oculto" alt="Imagen del cruce en el momento de la alerta">
+    <div class="fila" style="margin-top:10px">
+      <button class="boton grande verde" id="btn-entendido" type="button">Entendido</button>
+      <span class="suave" id="alerta-lat"></span>
+    </div>
+  </section>
+
+  <section class="panel" style="margin-top:14px">
+    <h2>Video del cruce en vivo</h2>
+    <img id="video" class="video oculto" alt="Video del cruce">
+    <div id="sin-video" class="sin-video">Sin cámara conectada.</div>
+  </section>
+
+  <section class="panel" style="margin-top:14px">
+    <h2>Acciones del guía</h2>
+    <div class="fila acciones">
+      <button class="boton grande rojo" id="btn-cerrar" type="button">Cerrar el cruce</button>
+      <button class="boton grande" id="btn-quitar" type="button">Quitar mi cierre</button>
+    </div>
+    <p class="suave">El guía puede cerrar el cruce, pero nunca abrirlo si los sensores marcan peligro.</p>
+  </section>
+
+  <section class="panel" style="margin-top:14px">
+    <h2>Conexión con el borde</h2>
+    <div class="entre"><span>Ida y vuelta (red 5G)</span><span class="kpi" id="lat-ping">—</span></div>
+    <canvas class="chispa" id="chispa"></canvas>
+  </section>
+
+  <p class="pie">Plan B del PTT/PTV: esta página recibe la alerta directo del servidor de borde por la red 5G privada, sin internet.</p>
+</div>
+<script src="/static/comun.js"></script>
+<script src="/static/guia.js"></script>
+</body>
+</html>

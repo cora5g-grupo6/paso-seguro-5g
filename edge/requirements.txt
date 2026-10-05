@@ -1,0 +1,12 @@
+# Paso Seguro 5G · servidor de borde (Python 3.11). Versiones probadas el 5-oct-2026.
+fastapi==0.142.2
+uvicorn[standard]==0.54.0
+paho-mqtt==2.1.0
+opencv-python-headless==4.14.0.94
+numpy==2.4.6
+httpx==0.28.1
+pydantic-settings==2.15.0
+tzdata==2026.5
+xmlschema==4.3.2
+# PyAV trae FFmpeg dentro: lee RTSP en Mac y Windows, donde OpenCV de pip no puede
+av==18.1.0

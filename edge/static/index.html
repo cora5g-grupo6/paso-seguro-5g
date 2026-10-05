@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Paso Seguro 5G · Tablero</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23161e26'/%3E%3Cpath d='M4 20c4-4 8 4 12 0s8 4 12 0v8H4z' fill='%231a73e8'/%3E%3Ccircle cx='16' cy='10' r='5' fill='%23f9ab00'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/estilo.css">
+</head>
+<body>
+<div class="envoltura">
+  <header class="cabecera">
+    <div class="marca">
+      <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#1e2832"/><path d="M4 20c4-4 8 4 12 0s8 4 12 0v8H4z" fill="#1a73e8"/><circle cx="16" cy="10" r="5" fill="#f9ab00"/></svg>
+      <strong>Paso Seguro 5G</strong>
+      <span id="nombre-cruce">cargando…</span>
+    </div>
+    <div class="fila">
+      <span class="chip"><span class="punto" id="pt-conexion"></span><span id="txt-conexion">Conectando al borde…</span></span>
+      <span class="chip"><span class="punto" id="pt-internet"></span><span id="txt-internet">Internet: —</span></span>
+      <button class="boton" id="btn-sonido" type="button">Sonido: no</button>
+      <span class="reloj" id="reloj">--:--:--</span>
+    </div>
+  </header>
+
+  <section class="banner" id="banner">
+    <div class="estado" id="estado">…</div>
+    <div class="detalle">
+      <div><b id="nivel">Nivel: —</b> <span id="fuente"></span> · <span id="desde"></span></div>
+      <div class="razon" id="razon"></div>
+      <div><span class="etiqueta-degradado">Modo degradado: faltan datos</span> <span class="razon" id="bajada"></span></div>
+    </div>
+  </section>
+
+  <div class="rejilla">
+    <section class="panel c5">
+      <h2>Cámara 5G · lectura de la regla</h2>
+      <div class="video-caja">
+        <img id="video" class="video oculto" alt="Video del cruce con la lectura del nivel">
+        <div id="sin-video" class="sin-video">Sin cámara por ahora.<br>El cruce se vigila con el sensor y el flotador del ESP32.</div>
+        <div class="medidor" id="medidor" title="Nivel del río">
+          <div class="agua" id="agua"></div>
+          <div class="valor" id="medidor-valor">—</div>
+        </div>
+      </div>
+      <div class="suave" id="cam-estado" style="margin-top:8px"></div>
+    </section>
+
+    <section class="panel c4">
+      <h2>Mapa del cruce</h2>
+      <svg id="mapa" class="mapa" role="img" aria-label="Mapa del cruce"></svg>
+      <div class="suave" id="mapa-pie" style="margin-top:6px"></div>
+    </section>
+
+    <section class="panel c3">
+      <h2>Latencia medida en vivo</h2>
+      <div class="entre"><span>Esta pantalla ↔ borde</span><span class="kpi" id="lat-ping">—</span></div>
+      <canvas class="chispa" id="chispa"></canvas>
+      <table>
+        <thead><tr><th>Tramo</th><th class="num">p50</th><th class="num">p95</th></tr></thead>
+        <tbody id="tabla-lat"></tbody>
+      </table>
+    </section>
+
+    <section class="panel c12">
+      <h2>Fuentes de la decisión</h2>
+      <div class="fuentes" id="fuentes"></div>
+    </section>
+
+    <section class="panel c6">
+      <h2>Mensaje al turista</h2>
+      <div class="mensajes">
+        <div class="mensaje"><div class="idioma">ESPAÑOL</div><div id="msg-es">—</div></div>
+        <div class="mensaje"><div class="idioma">ENGLISH</div><div id="msg-en">—</div></div>
+      </div>
+      <p class="suave">Páginas: <a href="/turista">turista (QR en el cruce)</a> · <a href="/guia">guía (XR20)</a> · <a href="/calibrar">calibrar cámara</a></p>
+    </section>
+
+    <section class="panel c6">
+      <h2>Eventos y alertas</h2>
+      <ul class="eventos" id="eventos"><li class="suave">Sin eventos todavía.</li></ul>
+    </section>
+
+    <section class="panel c6">
+      <h2>Feeds para mapas</h2>
+      <table>
+        <tbody>
+          <tr><td>Waze CIFS · JSON</td><td id="val-json" class="suave">—</td><td><a href="/feeds/waze.json" target="_blank">ver</a></td></tr>
+          <tr><td>Waze CIFS · XML</td><td id="val-xml" class="suave">—</td><td><a href="/feeds/waze.xml" target="_blank">ver</a></td></tr>
+          <tr><td>GeoJSON del estado</td><td class="suave">para cualquier mapa</td><td><a href="/feeds/estado.geojson" target="_blank">ver</a></td></tr>
+          <tr><td>Google Maps (carga GMCP)</td><td class="suave">solo cierres</td><td><a href="/feeds/google-cierres.geojson" target="_blank">ver</a></td></tr>
+        </tbody>
+      </table>
+      <p class="suave" id="feeds-nota">Waze consulta la URL cada pocos minutos. Publicarlo exige un socio oficial de Waze for Cities (por ejemplo, el MOPT). Google Maps toma los cierres del mismo feed.</p>
+    </section>
+
+    <section class="panel c6">
+      <h2>Lluvia del IMN (datos reales, API WIS2)</h2>
+      <div id="imn-resumen" class="suave">Consultando…</div>
+      <table style="margin-top:8px">
+        <thead><tr><th>Estación</th><th class="num">Última hora</th><th class="num">Máx. 1 h (48 h)</th><th>Cuándo</th></tr></thead>
+        <tbody id="tabla-imn"></tbody>
+      </table>
+    </section>
+
+    <section class="panel c12 oculto" id="panel-demo">
+      <h2>Ensayo sin hardware (modo demo)</h2>
+      <div class="fila">
+        <label for="deslizador" style="min-width:210px">Nivel simulado de la cámara: <b id="deslizador-valor">0 %</b></label>
+        <input type="range" id="deslizador" min="0" max="100" value="10" style="flex:1;min-width:220px">
+      </div>
+      <div class="fila" style="margin-top:10px">
+        <button class="boton" data-demo="subida" type="button">Crecida súbita (10 → 85 %)</button>
+        <button class="boton" data-demo="lluvia" type="button">Lluvia fuerte IMN (40,4 mm/h)</button>
+        <button class="boton" data-demo="persona" type="button">Persona en el cruce</button>
+        <button class="boton rojo" data-demo="cerrar" type="button">Cierre manual</button>
+        <button class="boton" data-demo="quitar" type="button">Quitar cierre manual</button>
+        <button class="boton" data-demo="reiniciar" type="button">Reiniciar</button>
+      </div>
+      <p class="suave">Con una cámara conectada, la cámara manda y el control deslizante se pisa con la lectura real.</p>
+    </section>
+  </div>
+
+  <p class="pie">La decisión se toma en el servidor de borde y llega por la red 5G privada: el aviso local funciona aunque no haya internet.</p>
+</div>
+<script src="/static/comun.js"></script>
+<script src="/static/mapa.js"></script>
+<script src="/static/tablero.js"></script>
+</body>
+</html>

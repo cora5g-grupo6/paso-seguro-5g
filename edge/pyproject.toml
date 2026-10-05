@@ -1,0 +1,10 @@
+[project]
+name = "paso-seguro-borde"
+version = "0.1.0"
+description = "Paso Seguro 5G: servidor de borde (Grupo 6, Hackatón 5G 2026)"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
