@@ -69,6 +69,7 @@ cd edge && .venv/bin/python -m pytest
 | `simular_sensor.py` | Simula el ESP32 por HTTP o MQTT. Escenarios: crecida, estable, oscilante, corte, flotador |
 | `generar_video_prueba.py` | Video del tubo con agua teñida, regla, marca de referencia y una «persona» que cruza, más su calibración |
 | `servir_rtsp.sh` | Sirve el video por la red: RTSP con mediamtx o, si no está, HTTP MPEG-TS con ffmpeg |
+| `grafana_tablero.py` | Genera los tableros de Grafana (Flux e InfluxQL) para la historia que el borde guarda en InfluxDB |
 | `medir_latencia.py` | `/ping` (p50, p95, jitter), comparación con la nube y tiempo «el agua sube → llega la alerta» |
 | `validar_feed.py` | Valida el feed de Waze contra la spec CIFS y el XSD oficial |
 | `relay_camara.py` | Plan C de la cámara: empuja cuadros de una webcam al borde por HTTP |
@@ -186,6 +187,15 @@ Todo va en `edge/.env`. Los comentarios de [`edge/.env.example`](edge/.env.examp
 | `WEBHOOK_URLS` | — | Webhooks genéricos |
 | `N8N_ACTIVO` / `N8N_WEBHOOK_URL` | false | n8n **solo de prueba**: la URL tiene que tener «prueba» o «test» |
 | `PTT_ACTIVO` | false | Stub de Team Comms: deja cada alerta en `datos/ptt_pendientes.jsonl` |
+| `INFLUX_ACTIVO` / `INFLUX_URL` / `INFLUX_TOKEN` | false | Historia en InfluxDB (opcional, ver abajo) |
+
+**InfluxDB (opcional).** Con `INFLUX_ACTIVO=true`, el borde guarda la historia para gráficos (Grafana) o para un gemelo digital. Si el otro grupo o la PCII ya tienen una base, basta con poner sus datos en `.env`.
+
+- `paso_seguro_estado`, en cada cambio de estado y cada `INFLUX_INTERVALO_S` (5 s): etiquetas `cruce` y `fuente`; campos `nivel`, `estado`, `estado_num` (0, 1 o 2), `tasa`, `degradado` y `discrepancia`.
+- `paso_seguro_latencia`, cada `INFLUX_LATENCIA_INTERVALO_S` (30 s): etiquetas `cruce` y `tramo`; campos `p50`, `p95`, `ultimo` y `n`.
+- Sirve para InfluxDB 2.x, Cloud y 3.x (`INFLUX_VERSION=2`, con token, org y bucket) y para 1.x (`INFLUX_VERSION=1`, con usuario y clave).
+- Si InfluxDB no responde, los avisos siguen igual: los puntos esperan en memoria (hasta 5000) y se reintentan. El estado del envío se ve en `/salud` y en `/api/estado`, en `influx`, sin el token.
+- **Tablero de Grafana listo para importar** (Dashboards → New → Import, y elegir la fuente InfluxDB): [`tools/grafana/paso-seguro-flux.json`](tools/grafana/paso-seguro-flux.json) para InfluxDB 2.x y Cloud, o [`tools/grafana/paso-seguro-influxql.json`](tools/grafana/paso-seguro-influxql.json) para 1.x y 3.x. Muestra el estado actual, el nivel, el estado en el tiempo, la latencia de la cámara, la del teléfono del guía y la de cada tramo, en hora de Costa Rica. Se regeneran con `tools/grafana_tablero.py`.
 
 El cruce (nombre, río, calle tal como figura en Waze, polilínea y equipos) va en `edge/config/cruce.json`. **El punto actual es de ejemplo.** Ver PLAN.md, sección 8.
 

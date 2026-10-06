@@ -31,6 +31,7 @@ from app.estado import Decision, Entradas, Estado, MaquinaEstados, Umbrales
 from app.feeds.geo import COLORES, estado_geojson, google_cierres_geojson
 from app.feeds.waze import CAJA_CR, GestorEpisodios, feed_cifs_json, feed_cifs_xml, iso, validar_cifs
 from app.imn import ClienteIMN, IMNError, distancia_km, estacion_mas_cercana
+from app.influx import ClienteInflux, EscritorInflux, puntos_estado, puntos_latencia
 from app.latencia import Latencias
 from app.mensajes import mensaje_persona, mensajes
 
@@ -86,6 +87,14 @@ class Sistema:
             politica=cfg.politica_nivel,
         )
         self.lat = Latencias()
+        self.influx: EscritorInflux | None = None
+        self.influx_error: str | None = None
+        if cfg.influx_activo and cfg.influx_url:
+            self.influx = EscritorInflux(ClienteInflux(
+                cfg.influx_url, cfg.influx_bucket, org=cfg.influx_org, token=cfg.influx_token,
+                version=cfg.influx_version, usuario=cfg.influx_usuario, clave=cfg.influx_clave))
+        elif cfg.influx_activo:
+            self.influx_error = "Falta INFLUX_URL en el .env"
         self.episodios = GestorEpisodios(
             self.cruce.id,
             bloque_s=cfg.waze_bloque_h * 3600,
@@ -192,6 +201,7 @@ class Sistema:
             self.vision.estado_txt = str(d.estado)
         if d.cambio:
             self._emitir(self._evento_cambio(d, t, motivo))
+            self.muestra_influx(t)  # el cambio queda en la historia con su hora exacta
         if d.cambio or cambio_feed:
             self._publicar_mqtt_estado()
         return d
@@ -522,6 +532,7 @@ class Sistema:
             "mqtt": {"activo": self.cfg.mqtt_activo, "conectado": bool(self.mqtt and self.mqtt.conectado)},
             "imn": self.imn_estado,
             "nube": self.nube,
+            "influx": self._estado_influx(),
             "umbrales": {"cuidado": u.cuidado, "cerrado": u.cerrado, "histeresis": u.histeresis,
                          "bajada_s": u.bajada_s, "tasa_cuidado": u.tasa_cuidado},
             "modo_demo": self.cfg.modo_demo,
@@ -532,7 +543,12 @@ class Sistema:
         return {"ok": True, "version": VERSION, "estado": str(self.decision.estado),
                 "arranque_iso": iso(self.arranque), "camara": self.camara.estado() if self.camara else {"activa": False},
                 "mqtt": {"activo": self.cfg.mqtt_activo, "conectado": bool(self.mqtt and self.mqtt.conectado)},
-                "imn": self.imn_estado, "nube": self.nube}
+                "imn": self.imn_estado, "nube": self.nube, "influx": self._estado_influx()}
+
+    def _estado_influx(self) -> dict:
+        if self.influx:
+            return self.influx.estado()
+        return {"activo": False, "error": self.influx_error} if self.influx_error else {"activo": False}
 
     # -- SSE ---------------------------------------------------------------------------------
 
@@ -557,6 +573,16 @@ class Sistema:
         if self.mqtt:
             self.mqtt.publicar(f"{self.cruce.id}/estado", self.respuesta_esp32(), retener=True)
             self._ultimo_mqtt = time.time()
+
+    def muestra_influx(self, t: float, latencias: bool = False) -> None:
+        """Encola el estado (y, si se pide, las latencias) para InfluxDB. No espera a la red."""
+        if not self.influx:
+            return
+        t_ms = round(t * 1000)
+        lineas = puntos_estado(self.decision, self.cruce.id, t_ms)
+        if latencias:
+            lineas += puntos_latencia(self.lat.resumen(), self.cruce.id, t_ms)
+        self.influx.agregar(lineas)
 
     def _guardar_linea(self, nombre: str, datos: dict) -> None:
         try:
@@ -598,8 +624,10 @@ class Sistema:
             self._tarea(self._bucle_imn())
         if self.cfg.nube_activa:
             self._tarea(self._bucle_nube())
-        log.info("Paso Seguro listo · cruce %s · cámara=%s mqtt=%s imn=%s", self.cruce.id,
-                 bool(self.camara), bool(self.mqtt), self.cfg.imn_activo)
+        if self.influx:
+            self._tarea(self._bucle_influx())
+        log.info("Paso Seguro listo · cruce %s · cámara=%s mqtt=%s imn=%s influx=%s", self.cruce.id,
+                 bool(self.camara), bool(self.mqtt), self.cfg.imn_activo, bool(self.influx))
 
     def _iniciar_camara(self) -> None:
         from app.camara import Camara
@@ -704,3 +732,17 @@ class Sistema:
                     self.nube = {"activa": True, "ok": False, "error": type(e).__name__,
                                  "destino": httpx.URL(self.cfg.nube_url).host}
                 await asyncio.sleep(self.cfg.nube_intervalo_s)
+
+    async def _bucle_influx(self) -> None:
+        ultima_lat = 0.0
+        while True:
+            try:
+                ahora = time.time()
+                con_lat = ahora - ultima_lat >= self.cfg.influx_latencia_intervalo_s
+                self.muestra_influx(ahora, latencias=con_lat)
+                if con_lat:
+                    ultima_lat = ahora
+                await self.influx.enviar()
+            except Exception:  # nunca tumbar el borde por InfluxDB
+                log.exception("Error escribiendo en InfluxDB")
+            await asyncio.sleep(self.cfg.influx_intervalo_s)

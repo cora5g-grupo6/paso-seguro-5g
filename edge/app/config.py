@@ -72,6 +72,18 @@ class Config(BaseSettings):
     nube_url: str = "https://www.google.com/generate_204"
     nube_intervalo_s: float = 15
 
+    # InfluxDB (opcional): historia del nivel, el estado, la fuente y las latencias (gráficos, gemelo digital)
+    influx_activo: bool = False
+    influx_url: str = ""  # p. ej. http://IP:8086 o la URL de InfluxDB Cloud
+    influx_version: str = "2"  # 2 (también Cloud y 3.x) | 1
+    influx_org: str = ""
+    influx_bucket: str = "paso_seguro"  # en InfluxDB 1.x es el nombre de la base
+    influx_token: str = ""  # solo en .env, nunca en el repositorio
+    influx_usuario: str = ""  # solo InfluxDB 1.x
+    influx_clave: str = ""  # solo InfluxDB 1.x
+    influx_intervalo_s: float = 5
+    influx_latencia_intervalo_s: float = 30
+
     # Feeds
     waze_bloque_h: float = 3
     waze_retencion_min: float = 60
