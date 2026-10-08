@@ -2,7 +2,7 @@
 
 **Grupo 6 · CORA 5G** · Hackatón Centroamericano de Innovación 5G · PCII, Vázquez de Coronado · 9 de octubre de 2026
 
-Equipo: Wlady, Jorge, Eddy, Stuart, Randall y Aina.
+**Equipo:** Stuart Rojas Barquero y Wladyslaw Labuda (líderes de equipo) · Jorge Eduardo Mejía Cabrera (datos e IA) · Randall Arturo Herradora Fallas (negocio y modelo de negocio) · Eddy Cruz Arroyo (investigación) · Aina Ruiz de Azúa Cladera.
 
 > **En una frase:** un sensor mide el nivel del río en un vado. Un servidor de borde, dentro de la red 5G, decide si el cruce está LIBRE, en CUIDADO o CERRADO, y avisa al guía, al turista, al mapa (Waze) y con una alarma en el sitio, aunque no haya internet.
 

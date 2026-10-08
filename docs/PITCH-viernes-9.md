@@ -200,9 +200,14 @@ Armado el jueves 8 con la guía de trabajo de Oscar Chacón («Cómo defender su
 
 ## 8. Equipo, próximos pasos y petición
 
-| Integrante | Credencial (completar en el ensayo) |
-|---|---|
-| [ ] | [ ] |
+| Integrante | Rol en el equipo | Credencial (completar en el ensayo) |
+|---|---|---|
+| Stuart Rojas Barquero | Líder de equipo | [ ] |
+| Wladyslaw Labuda | Líder de equipo; borde e integración | [ ] |
+| Jorge Eduardo Mejía Cabrera | Datos e IA | [ ] |
+| Randall Arturo Herradora Fallas | Negocio y modelo de negocio | [ ] |
+| Eddy Cruz Arroyo | Investigación | [ ] |
+| Aina Ruiz de Azúa Cladera | [ ] | [ ] |
 
 **Próximos pasos:**
 
