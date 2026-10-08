@@ -109,7 +109,7 @@ def crear_app(cfg: Config | None = None) -> FastAPI:
         return servir
 
     for ruta, archivo in (("/", "index.html"), ("/guia", "guia.html"), ("/turista", "turista.html"),
-                          ("/calibrar", "calibrar.html")):
+                          ("/calibrar", "calibrar.html"), ("/medir", "medir.html")):
         app.add_api_route(ruta, pagina(archivo), methods=["GET"], include_in_schema=False)
 
     # -- latencia y salud -------------------------------------------------------------------

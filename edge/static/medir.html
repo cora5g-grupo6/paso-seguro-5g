@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Paso Seguro · Medir 5G y 4G</title>
+  <link rel="stylesheet" href="/static/estilo.css">
+  <style>
+    .envoltura { max-width: 720px; }
+    .fila { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
+    .fila label { color: var(--suave); }
+    input, select, button { font: inherit; color: var(--texto); background: var(--panel2); border: 1px solid var(--borde); border-radius: 10px; padding: 10px 12px; }
+    button { cursor: pointer; font-weight: 650; }
+    button.principal { background: var(--azul); border-color: var(--azul); color: #fff; }
+    button:disabled { opacity: .5; cursor: default; }
+    table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+    th, td { text-align: right; padding: 6px 4px; border-bottom: 1px solid var(--borde); }
+    th:first-child, td:first-child { text-align: left; }
+    #progreso { min-height: 1.6em; }
+  </style>
+</head>
+<body>
+<div class="envoltura">
+  <header class="cabecera">
+    <div class="marca"><strong>Medir la red</strong><span>200 muestras · 5G con borde vs 4G con nube</span></div>
+    <a href="/guia">Página del guía</a>
+  </header>
+
+  <section class="panel">
+    <div class="fila">
+      <label for="id">Teléfono</label><input id="id" value="xr20" size="10">
+      <label for="red">Red ahora</label>
+      <select id="red"><option value="5g">5G</option><option value="4g">4G</option><option value="wifi">Wi-Fi</option></select>
+    </div>
+    <div class="fila">
+      <button class="principal" id="borde">Medir al borde</button>
+      <button class="principal" id="nube">Medir a la nube</button>
+    </div>
+    <div id="progreso" class="mono"></div>
+    <p style="color:var(--suave);margin-bottom:0">En 4G el teléfono no llega al borde: mida la nube, quedan guardadas aquí y se envían al volver a 5G o Wi-Fi.</p>
+  </section>
+
+  <section class="panel" style="margin-top:12px">
+    <h2>Resultados (ms)</h2>
+    <table>
+      <thead><tr><th>Medición</th><th>n</th><th>p50</th><th>p95</th><th>mín</th><th>máx</th><th>jitter</th><th>fallos</th></tr></thead>
+      <tbody id="tabla"></tbody>
+    </table>
+    <div class="fila"><button id="enviar">Enviar al borde</button><button id="borrar">Borrar</button><span id="envio" class="mono"></span></div>
+  </section>
+</div>
+<script>
+(() => {
+  const N = 200, PAUSA_MS = 250, NUBE = "https://www.google.com/generate_204";
+  const $ = (s) => document.querySelector(s);
+  let corridas = [];
+  try { corridas = JSON.parse(localStorage.getItem("ps-medir") || "[]"); } catch (e) {}
+  const guardar = () => { try { localStorage.setItem("ps-medir", JSON.stringify(corridas)); } catch (e) {} };
+
+  function stats(v) {
+    const a = [...v].sort((x, y) => x - y), n = a.length;
+    if (!n) return null;
+    const p = (q) => a[Math.min(n - 1, Math.round((n - 1) * q))];
+    const prom = a.reduce((s, x) => s + x, 0) / n;
+    const jitter = Math.sqrt(a.reduce((s, x) => s + (x - prom) ** 2, 0) / n);
+    return { n, p50: p(.5), p95: p(.95), min: a[0], max: a[n - 1], jitter };
+  }
+
+  function pintar() {
+    const f = (x) => (x == null ? "—" : x.toFixed(x < 10 ? 1 : 0));
+    $("#tabla").replaceChildren(...corridas.map((c) => {
+      const s = stats(c.rtt) || {};
+      const tr = document.createElement("tr");
+      const celdas = [`${c.red.toUpperCase()} → ${c.destino}${c.enviada ? " ✓" : ""}`, s.n ?? 0, f(s.p50), f(s.p95), f(s.min), f(s.max), f(s.jitter), c.fallos];
+      for (const x of celdas) { const td = document.createElement("td"); td.textContent = x; tr.append(td); }
+      return tr;
+    }));
+  }
+
+  async function medir(destino) {
+    const red = $("#red").value, rtt = [];
+    let fallos = 0;
+    for (const b of document.querySelectorAll("button")) b.disabled = true;
+    for (let i = 0; i <= N; i++) {  // la primera es de calentamiento (DNS y conexión): no cuenta
+      const url = destino === "borde" ? `/ping?t=${Date.now()}` : `${NUBE}?t=${Date.now()}`;
+      const t0 = performance.now();
+      try {
+        await fetch(url, destino === "borde" ? { cache: "no-store" } : { cache: "no-store", mode: "no-cors" });
+        if (i > 0) rtt.push(Math.round((performance.now() - t0) * 10) / 10);
+      } catch (e) { if (i > 0) fallos++; }
+      $("#progreso").textContent = `${red.toUpperCase()} → ${destino}: ${i}/${N}`;
+      await new Promise((r) => setTimeout(r, PAUSA_MS));
+    }
+    corridas.push({ red, destino, rtt, fallos, enviada: false, t: Date.now() });
+    guardar(); pintar();
+    $("#progreso").textContent = "Listo.";
+    for (const b of document.querySelectorAll("button")) b.disabled = false;
+  }
+
+  async function enviar() {
+    const id = ($("#id").value || "xr20").replace(/[^A-Za-z0-9_.-]/g, "").slice(0, 30);
+    let ok = 0;
+    for (const c of corridas.filter((c) => !c.enviada && c.rtt.length)) {
+      try {
+        const r = await fetch("/api/latencia/cliente", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cliente: `${id}-${c.red}-${c.destino}`, rtt_ms: c.rtt.slice(0, 200) }) });
+        if (r.ok) { c.enviada = true; ok++; }
+      } catch (e) {}
+    }
+    guardar(); pintar();
+    $("#envio").textContent = ok ? `Enviadas: ${ok}` : "No llegó al borde: conectarse a 5G o Wi-Fi y reintentar";
+  }
+
+  $("#borde").onclick = () => medir("borde");
+  $("#nube").onclick = () => medir("nube");
+  $("#enviar").onclick = enviar;
+  $("#borrar").onclick = () => { if (confirm("¿Borrar los resultados de este teléfono?")) { corridas = []; guardar(); pintar(); } };
+  pintar();
+})();
+</script>
+</body>
+</html>

@@ -153,9 +153,16 @@ def test_stream_sse_manda_el_estado_al_conectarse(cliente):
 
 
 def test_paginas_del_tablero(cliente):
-    for ruta in ("/", "/guia", "/turista", "/calibrar"):
+    for ruta in ("/", "/guia", "/turista", "/calibrar", "/medir"):
         r = cliente.get(ruta)
         assert r.status_code == 200 and "<html" in r.text.lower(), ruta
+
+
+def test_medir_manda_200_muestras_con_el_nombre_de_la_red(cliente):
+    # La página /medir manda cada tanda de 200 muestras como cliente «<id>-<red>-<destino>».
+    r = cliente.post("/api/latencia/cliente", json={"cliente": "xr20-4g-nube", "rtt_ms": [40.0] * 200})
+    assert r.json() == {"ok": True, "n": 200}
+    assert cliente.get("/api/latencia").json()["cliente_rtt_ms:xr20-4g-nube"]["n"] == 200
 
 
 def test_sin_camara_el_video_avisa(cliente):

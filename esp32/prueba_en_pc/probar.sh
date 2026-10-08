@@ -7,7 +7,7 @@
 set -euo pipefail
 AQUI="$(cd "$(dirname "$0")" && pwd)"
 SALIDA="${TMPDIR:-/tmp}/pasoseguro_pc"
-DEFINE=()
+DEFINE=(-DUSAR_ULTRASONICO=0)  # la PC simula el sensor analógico
 if [ "${1:-}" = "mqtt" ]; then
   # Copia del sketch con USAR_MQTT 1 (el original no se toca)
   mkdir -p "$SALIDA.mqtt/PasoSeguro"

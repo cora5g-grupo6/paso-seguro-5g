@@ -34,11 +34,22 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <WebServer.h>
+#if __has_include(<ESPmDNS.h>)
+#include <ESPmDNS.h>
+#define HAY_MDNS 1
+#endif
 
-// ---------- Red: cambiar antes de cargar ----------
+// ---------- Red ----------
+// El nombre y la clave del Wi-Fi van en secretos.h (copiar secretos.h.example). No se suben al repo.
+#if __has_include("secretos.h")
+#include "secretos.h"
+#else
 const char* WIFI_NOMBRE  = "NOMBRE_DE_LA_RED";   // Wi-Fi del CPE 5G (CPxx503e) o del router
 const char* WIFI_CLAVE   = "CLAVE_DE_LA_RED";
-const char* BORDE_HOST   = "192.168.1.50";       // IP del servidor de borde (MXIE o laptop)
+#endif
+const char* BORDE_HOST   = "192.168.1.142";      // IP del borde si no lo encuentra por nombre
+const char* BORDE_NOMBRE = "Gordo";              // nombre Bonjour de la laptop-borde (Gordo.local): sigue a la Mac aunque cambie de IP
+String bordeIp = BORDE_HOST;
 const int   BORDE_PUERTO = 8000;
 const char* DISPOSITIVO  = "esp32-flotador-1";
 
@@ -48,13 +59,26 @@ const int   MQTT_PUERTO = 1883;
 const char* MQTT_BASE   = "pasoseguro";
 const char* CRUCE_ID    = "vado-ruta-623";   // el "id" de config/cruce.json del borde
 
+// ---------- Sensor de nivel ----------
+// 1 = ultrasónico RCWL (Trig/Echo) mirando el agua desde arriba; 0 = sensor de agua analógico en PIN_AGUA.
+#ifndef USAR_ULTRASONICO
+#define USAR_ULTRASONICO 1
+#endif
+int PIN_TRIG = -1;   // -1 = lo busca solo al arrancar entre los pines de abajo
+int PIN_ECHO = -1;
+const int PINES_TRIG[] = {2, 4, 5, 12, 13, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33};
+const int PINES_ECHO[] = {2, 4, 5, 12, 13, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33, 34, 35, 36, 39};
+const int D0_MM   = 800;   // distancia del sensor al agua con el nivel en 0 %
+const int D100_MM = 300;   // distancia con el nivel en 100 % (el sensor no ve a menos de ~250 mm)
+bool sinEco = false;
+
 // ---------- Pines ----------
-const int PIN_FLOTADOR  = 14;
+int PIN_FLOTADOR  = -1;   // -1 = sin flotador conectado (en esta placa todavía no sabemos el pin)
 const int PIN_AGUA      = 34;
-const int PIN_LED_ROJO  = 25;
-const int PIN_LED_AMAR  = 26;
-const int PIN_LED_VERDE = 33;
-const int PIN_BUZZER    = 32;
+int PIN_LED_ROJO  = 25;
+int PIN_LED_AMAR  = 26;
+int PIN_LED_VERDE = 33;
+int PIN_BUZZER    = 32;
 
 // ---------- Ajustes ----------
 int AGUA_SECO  = 0;      // lectura del sensor de agua en seco
@@ -103,27 +127,124 @@ const char* colorEstado(Estado e) {
 }
 
 void buzzer(bool encendido) {
+  if (PIN_BUZZER < 0) return;
   digitalWrite(PIN_BUZZER, (encendido == BUZZER_ACTIVO_EN_ALTO) ? HIGH : LOW);
 }
 
-void luces(Estado e, bool encendidas) {
-  digitalWrite(PIN_LED_ROJO,  (encendidas && e == CERRADO) ? HIGH : LOW);
-  digitalWrite(PIN_LED_AMAR,  (encendidas && e == CUIDADO) ? HIGH : LOW);
-  digitalWrite(PIN_LED_VERDE, (encendidas && e == LIBRE)   ? HIGH : LOW);
+void escribir(int pin, bool v) {
+  if (pin >= 0) digitalWrite(pin, v ? HIGH : LOW);
 }
 
+void luces(Estado e, bool encendidas) {
+  escribir(PIN_LED_ROJO,  encendidas && e == CERRADO);
+  escribir(PIN_LED_AMAR,  encendidas && e == CUIDADO);
+  escribir(PIN_LED_VERDE, encendidas && e == LIBRE);
+}
+
+#if USAR_ULTRASONICO
+long ecoUs(int trig, int echo) {
+  digitalWrite(trig, LOW);
+  delayMicroseconds(4);
+  digitalWrite(trig, HIGH);
+  delayMicroseconds(20);
+  digitalWrite(trig, LOW);
+  return pulseIn(echo, HIGH, 30000);
+}
+
+// Prueba cada par de pines candidatos hasta que uno devuelve eco. Necesita algo enfrente a más de 30 cm.
+bool probarPar(int t, int e) {
+  pinMode(e, INPUT);
+  pinMode(t, OUTPUT);
+  long us = ecoUs(t, e);
+  if (us == 0) { delay(30); us = ecoUs(t, e); }
+  if (us > 0) {
+    PIN_TRIG = t;
+    PIN_ECHO = e;
+    Serial.printf("Sensor encontrado: Trig=GPIO%d Echo=GPIO%d (%ld us)\n", t, e, us);
+    return true;
+  }
+  pinMode(t, INPUT);
+  return false;
+}
+
+bool buscarPinesSensor(bool completa) {
+  // Primero los pines probables: SCL/SDA de «Especial pins» (22/21), OUTPUTS 16 y 4, y la entrada A0 (GPIO36).
+  const int pares[][2] = {{22, 21}, {21, 22}, {16, 4}, {4, 16}, {16, 36}, {22, 36}};
+  for (auto& par : pares)
+    if (probarPar(par[0], par[1])) return true;
+  if (!completa) return false;
+  const int nt = sizeof(PINES_TRIG) / sizeof(int), ne = sizeof(PINES_ECHO) / sizeof(int);
+  for (int j = 0; j < ne; j++) pinMode(PINES_ECHO[j], INPUT);
+  for (int i = 0; i < nt; i++) {
+    for (int j = 0; j < ne; j++) {
+      int t = PINES_TRIG[i], e = PINES_ECHO[j];
+      if (t == e || t == PIN_FLOTADOR || e == PIN_FLOTADOR) continue;
+      pinMode(t, OUTPUT);
+      long us = ecoUs(t, e);
+      if (us == 0) { delay(30); us = ecoUs(t, e); }
+      if (us > 0) {
+        PIN_TRIG = t;
+        PIN_ECHO = e;
+        Serial.printf("Sensor encontrado: Trig=GPIO%d Echo=GPIO%d (%ld us)\n", t, e, us);
+        int* salidas[] = {&PIN_LED_ROJO, &PIN_LED_AMAR, &PIN_LED_VERDE, &PIN_BUZZER};
+        for (int* s : salidas)
+          if (*s == t || *s == e) *s = -1;  // ese pin ahora es del sensor: esa luz o el zumbador quedan apagados
+        for (int jj = 0; jj < ne; jj++)
+          if (PINES_ECHO[jj] != t) pinMode(PINES_ECHO[jj], INPUT);
+        pinMode(t, OUTPUT);
+        pinMode(e, INPUT);
+        return true;
+      }
+      pinMode(t, INPUT);
+      delay(10);
+    }
+  }
+  Serial.println("Sensor ultrasónico: no encontré eco en ningún par de pines. Revisar cables y apuntarlo a algo a más de 30 cm.");
+  return false;
+}
+
+// Distancia en mm (mediana de 5), o -1 si no hay eco.
+int distanciaMm() {
+  if (PIN_TRIG < 0) return -1;
+  long v[5];
+  int k = 0;
+  for (int i = 0; i < 5; i++) {
+    long us = ecoUs(PIN_TRIG, PIN_ECHO);
+    if (us > 0) v[k++] = us;
+    delay(12);
+  }
+  if (k < 3) return -1;
+  for (int a = 0; a < k; a++)
+    for (int b = a + 1; b < k; b++)
+      if (v[b] < v[a]) { long x = v[a]; v[a] = v[b]; v[b] = x; }
+  return (int)(v[k / 2] * 0.343 / 2);  // mm, sonido a ~20 °C
+}
+#endif
+
 void leerSensores() {
+#if USAR_ULTRASONICO
+  int d = distanciaMm();
+  sinEco = d < 0;
+  lecturaAgua = d;  // en el JSON va como nivel_raw (mm)
+  if (!sinEco) nivelPct = constrain(map(d, D0_MM, D100_MM, 0, 100), 0, 100);
+#else
   long suma = 0;
   for (int i = 0; i < 4; i++) suma += analogRead(PIN_AGUA);
   lecturaAgua = suma / 4;
   nivelPct = constrain(map(lecturaAgua, AGUA_SECO, AGUA_LLENO, 0, 100), 0, 100);
-  int f = digitalRead(PIN_FLOTADOR);
-  flotadorActivo = FLOTADOR_CIERRA_EN_BAJO ? (f == LOW) : (f == HIGH);
+#endif
+  if (PIN_FLOTADOR < 0) {
+    flotadorActivo = false;
+  } else {
+    int f = digitalRead(PIN_FLOTADOR);
+    flotadorActivo = FLOTADOR_CIERRA_EN_BAJO ? (f == LOW) : (f == HIGH);
+  }
 }
 
 // Misma regla que el borde: sube al cruzar el umbral; para bajar hay que quedar 10 puntos abajo.
 Estado objetivoLocal(Estado actual) {
   if (flotadorActivo || nivelPct >= UMBRAL_ROJO) return CERRADO;
+  if (sinEco) return actual == CERRADO ? CERRADO : CUIDADO;  // sin datos nunca baja y queda al menos en CUIDADO
   if (actual == CERRADO && nivelPct >= UMBRAL_ROJO - HISTERESIS) return CERRADO;
   if (nivelPct >= UMBRAL_AMARILLO) return CUIDADO;
   if (actual != LIBRE && nivelPct >= UMBRAL_AMARILLO - HISTERESIS) return CUIDADO;
@@ -153,7 +274,7 @@ void actualizarLocal(unsigned long ahora) {
 String jsonLectura() {
   String j = "{";
   j += "\"id\":\"" + String(DISPOSITIVO) + "\",";
-  j += "\"nivel_pct\":" + String(nivelPct) + ",";
+  if (!sinEco) j += "\"nivel_pct\":" + String(nivelPct) + ",";
   j += "\"nivel_raw\":" + String(lecturaAgua) + ",";
   j += "\"flotador\":" + String(flotadorActivo ? "true" : "false") + ",";
   j += "\"semaforo_local\":\"" + String(colorEstado(estadoLocal)) + "\",";
@@ -196,7 +317,7 @@ bool leerRespuestaBorde(const String& json) {
 
 bool enviarPorHttp() {
   HTTPClient http;
-  String url = String("http://") + BORDE_HOST + ":" + String(BORDE_PUERTO) + "/api/sensor";
+  String url = String("http://") + bordeIp + ":" + String(BORDE_PUERTO) + "/api/sensor";
   http.setConnectTimeout(800);
   http.setTimeout(1500);
   if (!http.begin(clienteHttp, url)) return false;
@@ -244,7 +365,7 @@ void escribirTexto(uint8_t* p, int& n, const char* texto) {
 }
 
 bool conectarMqtt() {
-  if (!clienteMqtt.connect(BORDE_HOST, MQTT_PUERTO, 800)) return false;  // espera corta: las luces no se traban
+  if (!clienteMqtt.connect(bordeIp.c_str(), MQTT_PUERTO, 800)) return false;  // espera corta: las luces no se traban
   uint8_t p[160];
   int n = 0;
   p[n++] = 0x10;  // CONNECT
@@ -369,12 +490,16 @@ void paginaEstado() {
 
 void setup() {
   Serial.begin(115200);
-  pinMode(PIN_FLOTADOR, INPUT_PULLUP);
+  if (PIN_FLOTADOR >= 0) pinMode(PIN_FLOTADOR, INPUT_PULLUP);
   pinMode(PIN_LED_ROJO, OUTPUT);
   pinMode(PIN_LED_AMAR, OUTPUT);
   pinMode(PIN_LED_VERDE, OUTPUT);
   pinMode(PIN_BUZZER, OUTPUT);
   buzzer(false);
+#if USAR_ULTRASONICO
+  if (PIN_TRIG < 0) buscarPinesSensor(true);
+  else { pinMode(PIN_TRIG, OUTPUT); pinMode(PIN_ECHO, INPUT); }
+#endif
   for (int e = 0; e < 3; e++) {  // prueba de luces al arrancar
     luces((Estado)e, true);
     delay(250);
@@ -382,6 +507,9 @@ void setup() {
 
   // El Wi-Fi conecta en segundo plano: el aviso local arranca ya, sin esperar a la red.
   WiFi.mode(WIFI_STA);
+  int redes = WiFi.scanNetworks();  // lista las redes a la vista: sirve para copiar el nombre exacto
+  Serial.printf("Redes Wi-Fi a la vista: %d\n", redes);
+  for (int i = 0; i < redes; i++) Serial.printf("  [%s] %d dBm\n", WiFi.SSID(i).c_str(), WiFi.RSSI(i));
   WiFi.setAutoReconnect(true);
   WiFi.begin(WIFI_NOMBRE, WIFI_CLAVE);
   Serial.println("Conectando al Wi-Fi en segundo plano. Mientras tanto: modo local.");
@@ -398,17 +526,39 @@ void loop() {
   unsigned long ahora = millis();
   static unsigned long ultimaLectura = 0, ultimoEnvio = 0, ultimoWifi = 0, ultimoRegistro = 0;
 
+#if USAR_ULTRASONICO
+  static unsigned long ultimaBusqueda = 0;
+  if (PIN_TRIG < 0 && ahora - ultimaBusqueda > 10000) {  // sin sensor: prueba los pines de siempre cada 10 s
+    ultimaBusqueda = ahora;
+    static int vueltas = 0;
+    buscarPinesSensor(++vueltas % 12 == 0);  // la búsqueda completa (~20 s) solo cada 2 min
+  }
+#endif
   if (ahora - ultimaLectura >= LECTURA_MS) {
     ultimaLectura = ahora;
     leerSensores();
     actualizarLocal(ahora);
   }
 
+  // Busca la IP del borde por su nombre (Gordo.local) al conectar y cada 30 s mientras no conteste.
+  static unsigned long ultimaBusquedaBorde = 0;
+  static bool mdnsListo = false;
+  if (WiFi.status() == WL_CONNECTED && (!hayBorde || modoLocal) && (ultimaBusquedaBorde == 0 || ahora - ultimaBusquedaBorde > 30000)) {
+    ultimaBusquedaBorde = ahora;
+#ifdef HAY_MDNS
+    if (!mdnsListo) mdnsListo = MDNS.begin(DISPOSITIVO);
+    IPAddress ip = mdnsListo ? MDNS.queryHost(BORDE_NOMBRE, 1500) : IPAddress();
+    if (ip != IPAddress() && ip.toString() != bordeIp) {
+      bordeIp = ip.toString();
+      Serial.println("Borde encontrado por nombre: " + String(BORDE_NOMBRE) + ".local = " + bordeIp);
+    }
+#endif
+  }
   static bool wifiAvisado = false;
   if (WiFi.status() == WL_CONNECTED && !wifiAvisado) {
     wifiAvisado = true;
     Serial.println("Wi-Fi listo. Página local: http://" + WiFi.localIP().toString());
-    Serial.println("Borde: http://" + String(BORDE_HOST) + ":" + String(BORDE_PUERTO));
+    Serial.println("Borde: http://" + bordeIp + ":" + String(BORDE_PUERTO));
   }
   if (WiFi.status() != WL_CONNECTED) {
     wifiAvisado = false;

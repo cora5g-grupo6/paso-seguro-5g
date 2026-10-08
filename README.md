@@ -70,6 +70,7 @@ cd edge && .venv/bin/python -m pytest
 | `generar_video_prueba.py` | Video del tubo con agua teñida, regla, marca de referencia y una «persona» que cruza, más su calibración |
 | `servir_rtsp.sh` | Sirve el video por la red: RTSP con mediamtx o, si no está, HTTP MPEG-TS con ffmpeg |
 | `grafana_tablero.py` | Genera los tableros de Grafana (Flux e InfluxQL) para la historia que el borde guarda en InfluxDB |
+| `prueba_conectividad.sh` | Prueba la red 5G en 3 pasos (laptop por el dongle, salida a internet por RACSA, borde arriba), con OK o FALLA en cada uno |
 | `medir_latencia.py` | `/ping` (p50, p95, jitter), comparación con la nube y tiempo «el agua sube → llega la alerta» |
 | `validar_feed.py` | Valida el feed de Waze contra la spec CIFS y el XSD oficial |
 | `relay_camara.py` | Plan C de la cámara: empuja cuadros de una webcam al borde por HTTP |

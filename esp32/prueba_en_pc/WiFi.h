@@ -31,6 +31,9 @@ class WiFiFalso {
   int status() { return getenv("PRUEBA_SIN_WIFI") ? WL_DISCONNECTED : WL_CONNECTED; }
   IPAddress localIP() { return {"127.0.0.1"}; }
   int8_t RSSI() { return -58; }
+  int8_t RSSI(int) { return -58; }
+  int scanNetworks() { return 0; }
+  String SSID(int) { return String(""); }
 };
 extern WiFiFalso WiFi;
 
